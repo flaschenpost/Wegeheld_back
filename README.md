@@ -11,5 +11,7 @@ Ziele:
 ## Ablauf: 
 ### Reporter anlegen
 POST createReporter.html POST mit city, zipcode, email, nickname
+### Basisdaten holen
 GET getBaseData.html liefert [CarColor,Action,CarBrand, Funnysaying, Offense, Obstruction, EmailText]
+### Ordnungsamt holen
 GET getOffices.html Parameter postalcode: liefert zuständiges Ordnungsamt 
