@@ -1,0 +1,834 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+<script src="/.well-known/jquery.min.js"></script>
+<script src="/.well-known/exif.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/js/select2.min.js"></script>
+
+	  </head>
+	  <body>
+      <section id="start" onDrop="dropImage(event);" ondragover="event.preventDefault();allowDrop(event);">
+        <h3><a href="#start">Auswahl</a></h3>
+        <p>
+        <ol>
+          <li> Foto auswählen: <input type="file" accept="image/*" name="image" id="fileChooser" multiple=true/></li>
+          <li> Personen und Kennzeichen schwärzen.</li>
+          <li> Adresse suchen, Marke und Farbe eintragen, Zeiten prüfen</li>
+          <li> Abschicken </li>
+        </ol>
+        </p>
+        <textarea name="address" cols="60" rows="7" id="address" onChange="saveAddress()" ></textarea>
+        <textarea name="subject" cols="120" rows="1" id="subject"></textarea>
+        <textarea name="mailtext" cols="120" rows="20" id="lastMail"></textarea>
+       <button type="button" onClick="nextFile();" name="next" >next</button><br/>
+      </section>
+      <!--
+   </section>
+      -->
+      <section id="paint">
+        <h3><a href="#paint">Foto</a></h3>
+        <div style="float:right;width:75%;border:2px solid green;"><canvas id="canvas" ></canvas></div>
+   <!-- <button type="button" onClick="initCanvas()">Reset</button> -->
+   <div style="float: left;width:20%;">
+     <form name="carpart" id="carpart">
+     Verstoß: <select name="offense" id="offense"> </select><br/>
+     Marke: <select name="brand" id="brand"></select><br/>
+     Farbe: <select name="color" id="color"></select><br/>
+     Kennzeichen: <input type="text" size="8" name="plate" id="plate"/> <br/>
+     </form>
+   </div>
+   <div style="clear:both;"></div>
+      </section>
+      <section id="map" >
+        <h3><a href="#map">Karte</a></h3>
+        <div>
+         <div id="mapid" ></div>
+         <div id="addressinput">
+   <div id="form" >
+   Aktualisiere: <button type="button" id="fromMarkerButton" onClick="readAddressFromMarker()">Adresse</button>
+   <button type="button" id="fromAddressButton" onClick="readMarkerFromAddress()">Marker</button>
+   <form id="theform"  method="POST" action="https://api.wegeheld.org/sendReport" enctype="multipart/form-data" >
+     <input type="hidden" name="thephoto" id="thephoto" value=""/>
+     <input type="hidden" name="reporter" id="reporter" value="webreporter"/>
+     <input type="hidden" name="filename" id="filename" value="webreporter"/>
+     <!-- Behinderung: <br/><select name="obstruction" id="obstruction"></select><br/> -->
+     Zeit: <input type="datetime-local" data-date-format="DD MMMM YYYY HH:II" id="starttime" name="start"/>
+     <div onChange="addressChanged()">
+     Straße: <input type="text" size="30" name="street" id="street"/> Nr: <input type="text" size="5" name="streetnr" id="streetnr"/><br/>
+     PLZ: <input type="text" size="5" name="zipcode" id="zipcode"/> Stadt <input type="text" size="20" id="city" name="city"/> <br/>
+     </div>
+     lat: <input type="number" style="width:11em;" step="any" name="lat" id="lat"/> lng: <input type="number" style="width:11em;" step="any" name="lng" id="lng"/> <br/>
+     <button type="button" onClick="sendData(true);" name="ok" >ok</button><br/>
+     <button type="button" onClick="sendData(false);" name="mail" >mail</button><br/>
+   </form>
+   </div>
+         <canvas id="smallimage"></canvas>
+         </div> 
+      </section>
+  </body>
+<script>
+var address="";
+/** INIT **/
+$(document).ready(function(){
+  document.querySelector("#fileChooser").addEventListener('change',filesChosen, false);
+  initBaseData();
+  location.href='#start';
+  $('#start').keydown(function(e){
+
+    //if(e.key=='o' && ! e.repeat ){
+      //$('#fileChooser').click();
+    //}
+  });
+  if(localStorage.getItem("address")){
+    address=localStorage.getItem("address");
+    console.log("localStorage address = " + address);
+    $('#address').val(address);
+  }
+  if(localStorage.getItem("latitude")){
+    console.log("localStorage lat = " + lat);
+    lat=localStorage.getItem("latitude");
+  }
+  if(localStorage.getItem("longitude")){
+    lng=localStorage.getItem("longitude");
+    console.log("localStorage lng = " + lng);
+  }
+});
+var key='AIzaSyBa5GQvYs94yjIO1l3CnrRxdmrJPkvdmPw';
+var map=null, marker=null, geocoder=null, basedata=null;
+var ctx=null, canvas=null;
+var origImage=null;
+var origCtx = null;
+var smallCtx = null;
+
+var clicks = new Array();
+var paint;
+var lastElem=false;
+var colorElem=false;
+var mapScriptsLoaded=false;
+
+var lineWidth=null;
+var maxLineWidth=90;
+
+var lat=51.4, lng=10.6;
+var filedate = false;
+
+var paintFact=0;
+var onImage = false;
+var qual=false;
+
+var filestack = [];
+
+var filename = false;
+function activateMap(){
+  mapScriptsLoaded=true;
+}
+
+function saveAddress(){
+  address=$('#address').val();
+  localStorage.setItem("address",address);
+}
+
+
+function sendPhoto(){
+
+  if( ! qual){
+    qual=0.9;
+  }
+  var file=canvas.toDataURL('image/jpeg',qual);
+  while(file.length > 1300000 && qual > 0.3){
+    qual *= 0.8;
+    console.log(qual);
+    file=canvas.toDataURL('image/jpeg',qual);
+  }
+  while(file.length < 600000 && qual < 0.9){
+    qual *= 1.2;
+    console.log(qual);
+    if(qual >= 1){
+      qual=1;
+    }
+    file=canvas.toDataURL('image/jpeg',qual);
+  }
+  $('#thephoto').val(file);
+  var blob=new Blob([file], {type:"image/jpeg"});
+  var a = document.createElement("a");
+  a.download = filename;
+  a.href = file;
+  document.body.appendChild(a);
+
+}
+
+function sendData(withTwitter){
+
+  if( ! qual){
+    qual=0.9;
+  }
+  var file=canvas.toDataURL('image/jpeg',qual);
+  while(file.length > 1300000 && qual > 0.3){
+    qual *= 0.8;
+    file=canvas.toDataURL('image/jpeg',qual);
+  }
+  while(file.length < 200000 && qual < 0.9){
+    qual *= 1.1;
+    if(qual >= 1){
+      qual=1;
+    }
+    file=canvas.toDataURL('image/jpeg',qual);
+  }
+  if(withTwitter){
+    formData=$('#carpart').serialize();
+    console.log(formData);
+    $('#thephoto').val(file);
+    formData=formData + "&" + $('#theform').serialize();
+    console.log($('#starttime').val());
+    $.ajax({
+      method:"POST",
+      type:"POST",
+      url: "https://api.wegeheld.org/sendReport",
+      data: formData,
+      error:function(e){alert("upload error!");console.log(e);},
+    });
+  }
+  $('#subject').val("Anzeige einer Verkehrsordnungswidrigkeit: " + $('#plate').val());
+
+  var from = new Date($('#starttime').val());
+  console.log(from);
+  var fromString = from.toLocaleString('DE-de');
+  console.log(fromString);
+
+  $('#lastMail').val("Sehr geehrte Damen und Herren,\n\n"
++"Hiermit zeige ich – mit der Bitte um Weiterverfolgung durch Ihr Amt – folgende Verkehrsordnungswidrigkeit an: \n"
++"\nVerkehrsordnungswidrigkeit: " + $('#offense option:selected').text()
+ + "\nVon: " + fromString
+ + "\nBis: " + fromString
+ + "\nOrt: " + $('#street').val() + "  " + $('#streetnr').val()
+ + "\n     " + $('#zipcode').val() + " " + $('#city').val()
+    + "\n\nMarke und Farbe: " + $('#brand :selected').text() + " " + $('#color :selected').text()
+    + "\nKennzeichen        : " + $('#plate').val()
++ "\n\nDanke, dass Sie sich durch Weiterverfolgung oben angezeigter Verkehrsordnungswidrigkeit für mehr Rücksicht, freie Wege und eine bessere Stadt einsetzen!"
++ "\nDas Fahrzeug war verlassen."
++ "\nDas Fahrzeug stand mindestens 3 Minuten dort. "
++ "\nBehinderung lag vor, das heißt, andere Verkehrsteilnehmer wurden durch das Fahrzeug behindert. "
++ "\n  "
++ "\nIch stelle mich als Zeuge zur Verfügung und bin damit einverstanden, als Zeuge benannt zu werden.\n"
+ + "\n"
++ "\nLadungsfähige Anschrift: "
++ "\n"
+    + address
+    + "\nMit freundlichen Grüßen \n"
+  );
+  sendMail("ordnungswidrigkeit@halle.de",$('#subject').val(), $('#lastMail').val());
+  jumpTo("start");
+    
+  
+}
+
+function initBaseData(){
+  $.getJSON({
+    dataType: 'json',
+    url: '/getBaseData',
+    crossDomain: true,
+    success: function(data){
+      basedata = data;
+      for(var i=0;i<basedata['offenses'].length;i++){
+        var entry = basedata['offenses'][i];
+        $('#offense').append($('<option>', {'value': entry.id, 'text': entry.name}));
+      }
+      for(var i=0;i<basedata['brands'].length;i++){
+        var entry = basedata['brands'][i];
+        if(entry.name.includes("Sonstige")){
+          $('#brand').append($('<option>', {'value': entry.id, 'text': entry.name, 'selected':"selected"}));
+        }
+        else{
+          $('#brand').append($('<option>', {'value': entry.id, 'text': entry.name}));
+        }
+      }
+      for(var i=0;i<basedata['colors'].length;i++){
+        var entry = basedata['colors'][i];
+        if(entry.name.includes("Sonstige")){
+          $('#color').append($('<option>', {'value': entry.id, 'text': entry.name, 'selected':"selected"}));
+        }
+        else{
+          $('#color').append($('<option>', {'value': entry.id, 'text': entry.name}));
+        }
+      }
+      /*
+      for(var i=0;i<basedata['obstructions'].length;i++){
+        var entry = basedata['obstructions'][i];
+        $('#obstruction').append($('<option>', {'value': entry.id, 'text': entry.name}));
+      }
+      $('#obstruction').select2();
+      */
+    },
+    error: function(xhr,status){alert("error!");console.log(xhr);console.log(status);}
+  });
+
+}
+
+function initCanvasPaint(){
+  var jCanvas=$('#canvas');
+  var rect = jCanvas.get(0).getBoundingClientRect();
+  var offX = rect.left;
+  var offY = rect.top;
+  clicks=[];
+  if(origImage && origImage.width && jCanvas.width()){
+    paintFact = Math.min(origImage.width/jCanvas.width(), origImage.height/jCanvas.height()); 
+    lineWidth=Math.round(origImage.height / 38 )+1;
+    maxLineWidth = lineWidth*3;
+  }
+  else{
+    paintFact=1;
+    lineWidth=40;
+    maxLineWidth = lineWidth*3;
+  }
+
+  jCanvas.mousedown(function(e){
+    var mouseX = e.pageX - offX;
+    var mouseY = e.pageY - offY;
+
+    paint = true;
+    addClick(mouseX*paintFact, mouseY*paintFact);
+    redraw();
+  });
+  jCanvas.mousemove(function(e){
+    var px = e.pageX - offX;
+    var py = e.pageY - offY;
+    if(paint){
+      // addClick(e.pageX - this.offsetLeft, e.pageY - this.offsetTop, true);
+      addClick(px*paintFact, py*paintFact, true);
+      redraw();
+    }
+    if(isWaiting){
+      redraw();
+    }
+  });
+  jCanvas.mouseup(function(e){
+    paint = false;
+    // jCanvas.css("cursor","url('/.well-known/draw_rect.gif')");
+  });
+  jCanvas.mouseleave(function(e){
+    paint = false;
+    onImage=false;
+  });
+  jCanvas.mouseenter(function(e){
+    onImage=true;
+  });
+  jCanvas.click(function(e){
+  });
+
+  console.log("add key events");
+  document.addEventListener('keydown', function(e){
+    if(! onImage){
+      return;
+    }
+    // console.log(e.key + " " + e.repeat);
+    if(e.key=='+' && ! e.repeat && lineWidth < maxLineWidth){
+      lineWidth++;
+      console.log("lineWidth="+lineWidth);
+      return;
+    }
+    if(e.key=='-' && ! e.repeat && lineWidth > 3){
+      lineWidth--;
+      console.log("lineWidth="+lineWidth);
+      return;
+    }
+    if(e.key=='r' && ! e.repeat){
+      initCanvas();
+      return;
+    }
+    if(e.key=='Enter'){
+      onImage=false;
+      initMap();
+      return;
+    }
+    if(e.key==' '){
+      onImage=false;
+      nextFile();
+      return;
+    }
+    if(e.key=='s'){
+      onImage=false;
+      sendPhoto();
+      return;
+    }
+  });
+  // initMap();
+}
+
+function addClick(x, y, dragging=false)
+{
+  clicks.push({x:x,y:y,dragging:dragging});
+}
+
+var isDrawing=false;
+var isWaiting=false;
+
+function redraw(){
+  if(isDrawing){
+    isWaiting=true;
+    return;
+  }
+  isDrawing=true;
+  isWaiting=false;
+
+  ctx.lineJoin = "round";
+  ctx.lineWidth = lineWidth;
+
+  var elem=clicks.shift();
+    
+
+  if( ! colorElem || Math.abs(colorElem.x - elem.x) > 7 || Math.abs(colorElem.y - elem.y) > 7){
+    var x=elem.x, y=elem.y;
+    if(x > lineWidth){x -= lineWidth;}
+    if(y > lineWidth){y -= lineWidth;}
+    var data = origCtx.getImageData(x, y, 2*lineWidth,2*lineWidth).data;
+
+    var r=0,g=0,b=0,c=0,i=0;
+    while(i<data.length){
+      r += data[i]; i++;
+      g += data[i]; i++;
+      b += data[i]; i++;
+      i++;//alpha
+      c++;
+    }
+    r = Math.floor(r/c).toString(16);
+    g = Math.floor(g/c).toString(16);
+    b = Math.floor(b/c).toString(16);
+    ctx.strokeStyle = '#'+r+g+b;
+    colorElem=elem;
+  }
+
+
+  if(lastElem==false){
+    lastElem=elem;
+  }
+  while(elem){
+    //console.log("from");console.log(lastElem);console.log(" to");console.log(elem);
+    ctx.beginPath();
+    if(elem.dragging){
+      ctx.moveTo(lastElem.x, lastElem.y);
+    }else{
+      ctx.moveTo(elem.x-1, elem.y);
+    }
+    ctx.lineTo(elem.x, elem.y);
+    ctx.closePath();
+    ctx.stroke();
+    lastElem=elem;
+    elem=clicks.shift();
+  }
+  isDrawing=false;
+}
+
+function initMap() {
+  var germany = {lat: 51.4, lng: 10.6};
+  console.log("map=");console.log(map);
+  console.log("marker=");console.log(marker);
+  console.log("latlng="+lat+" " + lng);
+  if(map && marker){
+    if(lat >= 47 && lng > 3){
+      moveBus(map,marker,lat,lng);
+    }
+    jumpTo("map");
+    smallCtx=document.getElementById('smallimage').getContext('2d');
+    if(ctx){
+      $('#smallimage').width=origImage.width;
+      $('#smallimage').height=origImage.height;
+      $('#smallimage').css("width",$('#addressinput').width());
+      smallCtx.drawImage(origImage, 0,0);
+  }
+
+    return;
+  }
+  var start = {lat: lat, lng: lng};
+  if(lat < 47 || lng < 3){
+    start = germany;
+  }
+  map = new google.maps.Map(document.getElementById('mapid'), {
+    zoom: 6,
+    center: start
+  });
+  marker = new google.maps.Marker({
+    position: start,
+    map: map,
+    draggable:true
+  });
+  google.maps.event.addListener(marker, 'dragend', markerChanged);
+  geocoder=new google.maps.Geocoder();
+  moveBus(map, marker, lat, lng);
+  $('#mapid').show();
+  jumpTo("map");
+  // $('#addressinput').height($('#map').height());
+ 
+
+}
+
+function moveBus( map, marker, lat, lng ) {
+  console.log("moveBus: lat="+lat+"lng="+lng);
+  var latlng=new google.maps.LatLng(lat,lng);
+  marker.setPosition(latlng);
+  map.panTo(latlng);
+  map.setZoom(18);
+  localStorage.setItem("latitude",lat);
+  localStorage.setItem("longitude",lng);
+};
+
+function addressChanged(){
+  $('#fromAddressButton').addClass('red');
+}
+function markerChanged(){
+  $('#fromMarkerButton').addClass('red');
+}
+
+function readAddressFromMarker(){
+  lat=marker.getPosition().lat();
+  lng= marker.getPosition().lng();
+
+  decodeCoordinates(lat,lng);
+  $('#fromMarkerButton').removeClass("red");
+}
+
+function readMarkerFromAddress(){
+  geocoder.geocode({'address':$('#street').val() + " " + $('#streetnr').val() + " " + $('#zipcode').val() + " " + $('#city').val()},
+    function(results, status) {
+      if (status == 'OK') {
+        console.log(results[0].geometry);
+        map.setCenter(results[0].geometry.location);
+        marker.setPosition(results[0].geometry.location);
+        map.setZoom(18);
+      } else {
+        alert('Geocode was not successful for the following reason: ' + status);
+      }
+    });
+  $('#fromAddressButton').removeClass('red');
+}
+
+/******************/
+/* PHOTO UPLOAD   */
+/******************/
+
+function jumpTo(hash){
+  url=location.href;
+  location.href='#'+hash;
+  history.replaceState(null,null,url);
+  // if(hash=="start"){
+    // $('#fileChooser').click();
+  // }
+}
+function allowDrop(ev){
+  ev.preventDefault();
+}
+function dropImage(ev){
+  ev.preventDefault();
+  console.log(ev.dataTransfer);
+  var files = ev.dataTransfer.files;
+  console.log("dropEvent /ent: files = ");console.log(files);
+  var url=ev.dataTransfer.getData("Url");
+  if(files.length > 0){
+    console.log("readFile");
+    readFile(files[0]);
+  }
+  else{
+    console.log("readUrl");
+    // readUrl(url);
+  }
+  console.log(url);
+  origImage = new Image();
+  origImage.setAttribute('crossOrigin', 'anonymous');
+  origImage.addEventListener('load',evalExifdata, false);
+  console.log("loaded");
+  origImage.onload=initCanvas;
+  console.log("set origImage");
+  origImage.src=url;
+  canvas=document.getElementById('canvas');
+  ctx=canvas.getContext('2d');
+  var origCanvas = document.createElement("canvas");
+  origCtx = origCanvas.getContext("2d");
+  origCtx.drawImage(origImage,0,0);
+  initCanvasPaint();
+  console.log("end filedrop");console.log(ctx);
+}
+
+// load file as image
+function filesChosen(evt){
+  filestack= Array.from(evt.target.files); //get files as array
+  nextFile();
+}
+
+function nextFile(){
+  if(filestack === undefined || filestack.length == 0){
+    jumpTo('start');
+  }
+  else{
+    readFile(filestack.shift());
+  }
+}
+
+function readUrl(chosenUrl){
+  console.log("readUrl" + chosenUrl);
+  filedate=false;
+  if(! chosenUrl){
+    return;
+  }
+
+  console.log("show canvas");
+  try{
+    console.log("name="+chosenUrl);
+    $('#filename').val(chosenUrl);
+    filename="f_"+chosenUrl;
+  }
+  catch(e){
+    console.log(e);
+    alert(e);
+  }
+
+  origImage = new Image();
+  origImage.setAttribute('crossOrigin', 'anonymous');
+  origImage.addEventListener('load',evalExifdata, false);
+  origImage.onload=initCanvas;
+  console.log("set origImage");
+  origImage.src=chosenUrl;
+  jumpTo("paint");
+  onImage=true;
+  //filedate=chosenFile.lastModifiedDate;
+  canvas=document.getElementById('canvas');
+  ctx=canvas.getContext('2d');
+  initCanvasPaint();
+  console.log("end filesChosen");console.log(ctx);
+}
+
+function readFile(chosenFile){
+  console.log("readFile" + chosenFile);
+  filedate=false;
+  if(! chosenFile){
+    return;
+  }
+  var reader = new FileReader();
+  //create our FileReader object to read the file
+
+  console.log("show canvas");
+  try{
+    console.log("name="+chosenFile.name);
+    $('#filename').val(chosenFile.name);
+    filename="f_"+chosenFile.name;
+  }
+  catch(e){
+    console.log(e);
+    alert(e);
+  }
+
+  reader.addEventListener("load",
+    function(evt){
+      origImage = new Image();
+      origImage.addEventListener('load',evalExifdata, false);
+      console.log("loaded");
+      origImage.onload=initCanvas;
+      console.log("set origImage");
+      origImage.src=evt.target.result;
+      jumpTo("paint");
+      onImage=true;
+    }
+    , false);
+  reader.readAsDataURL(chosenFile);
+  filedate=chosenFile.lastModifiedDate;
+  canvas=document.getElementById('canvas');
+  ctx=canvas.getContext('2d');
+  initCanvasPaint();
+  console.log("end filesChosen");console.log(ctx);
+}
+
+
+function initCanvas(){
+  canvas.width=origImage.width;
+  canvas.height=origImage.height;
+
+  var origCanvas = document.createElement("canvas");
+  origCanvas.width=origImage.width;
+  origCanvas.height=origImage.height;
+  origCtx = origCanvas.getContext("2d");
+  origCtx.drawImage(origImage,0,0);
+  ctx.drawImage(origImage,0,0);
+  initCanvasPaint();
+}
+
+// get coordinates from Exif-data and start
+function evalExifdata(evt){
+  console.log("evalExifdata");
+  origImage.exifdata=null;
+  var result,tags,start=false;
+  try{
+    result = EXIF.getData(origImage, function(){
+      tags=EXIF.getAllTags(this);
+      console.log(tags);
+      if(tags['DateTimeOriginal']){
+        var t=tags['DateTimeOriginal'].split(/[- :]/);
+        console.log(t);
+        start=t[0]+'-'+t[1]+'-'+t[2]+'T'+t[3]+':'+t[4];
+        $('#starttime').val(start);
+      }
+      if(! tags || ! tags['GPSLatitude']){
+        return;
+      }
+      var deglat=tags['GPSLatitude'];
+      var deglng=tags['GPSLongitude'];
+      if(deglat && deglng){
+        lat=deglat[0] + deglat[1]/60 + deglat[2]/3600;
+        lng=deglng[0] + deglng[1]/60 + deglng[2]/3600;
+        decodeCoordinates(lat, lng);
+        if(map){
+          moveBus(map, marker, lat, lng);
+        }
+      }
+    });
+  }
+  catch(e){
+    console.log("Exception read image: ");console.log(e);
+  }
+  if(! start && filedate){
+    var fd = filedate.toJSON();
+    var t=filedate.toJSON().split(/[- :T]/);
+    start=t[0]+'-'+t[1]+'-'+t[2]+'T'+t[3]+':'+t[4];
+    $('#starttime').val(start);
+  }
+
+}
+
+// get address from geo coordinates
+function decodeCoordinates(lat, lng){
+  try{
+    var addr={};
+    var req='https://maps.googleapis.com/maps/api/geocode/json?latlng='+lat+","+lng+"&key="+key+"&result_type=street_address"
+    $.getJSON(req, function(data){
+      addr=data;
+      console.log(data);
+      addr = evalAddressResult(data['results']);
+      $('#lat').val(lat);
+      $('#lng').val(lng);
+      if(addr){
+        $('#street').val(addr['street']);
+        $('#streetnr').val(addr['streetnr']);
+        $('#city').val(addr['city']);
+        $('#zipcode').val(addr['zipcode']);
+      }
+    });
+  }
+  catch(e){
+    console.log("Exception decodeCoordinates: ");console.log(e);
+  }
+}
+// evaluate google address data
+function evalAddressResult(data){
+  var result={};
+  for (var i = 0; i < data.length; i++) {
+    res = data[i];
+    for (var j = 0; j < res['address_components'].length; j++) {
+      component = res['address_components'][j];
+      var types = component['types'];
+      var val = component['long_name'];
+      for (var k = 0; k<types.length; k++){
+        if(types[k]=='route'){
+          result['street'] = val;
+          continue;
+        }
+        if(types[k]=='street_number'){
+          result['streetnr']=val;
+          continue;
+        }
+        if(types[k]=='locality'){
+          result['city']=val;
+          continue;
+        }
+        if(types[k]=='postal_code'){
+          result['zipcode']=val;
+          continue;
+        }
+      }
+      if(result['street'] && result['streetnr'] && result['city'] && result['zipcode']){
+        return result;
+      }
+    }
+    return false;
+  }
+}
+
+function sendMail(receiver, subject, body) {
+    body += window.location.href;
+    body += ">";
+    var uri = "mailto:?to="+receiver+"&subject=";
+    uri += encodeURIComponent(subject);
+    uri += "&body=";
+    uri += encodeURIComponent(body);
+    window.open(uri);
+} 
+</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA6zVIqj1qGVV6A4zvSlnZtxXuv4lahh3U&callback=activateMap"> </script>
+<style>
+#mapid{width:60vw;height:95vh;float:left;margin:0;padding:0;border:1px solid green;}
+#addressinput{width:38vw;float:right;margin:0;padding:0;border:2px solid blue;}
+#smallimage{width:90%; margin-right:0;margin-left:0;padding:0;}
+section{
+  position: absolute;
+  display: block;
+  width:99vw;
+  height:95vh;
+  top: 2em;
+  background-color: #c5d2de;
+
+}
+
+section h3{
+  position: absolute;
+  left:0;
+  top:-1.5em;
+  width: 8em;
+  height: 1.4em;
+  background-color:blue;
+
+  margin: 0;
+  background-color: #c5d2de;
+  border-radius: 15px 15px 0 0;
+  border: solid #ffffff;
+  border-width: 1px 1px 0 0;
+  z-index: 1;
+}
+
+section:nth-child(2) h3 {
+  left: 8em;
+  z-index: 0;
+}
+
+section:nth-child(3) h3 {
+  left: 16em;
+  z-index: -1;
+}
+
+section h3 a {
+  display: block;
+  margin: 5px 0 0 0;
+  text-align: center;
+  text-decoration: none;
+  color: #000000;
+}
+
+section:target{
+  z-index: 1;
+}
+section:target h3 {
+  color: #FFFFFF;
+  background-color: #194b7d;
+  z-index: 1;
+}
+section:target h3 a{
+  color: #FFFFFF;
+}
+#canvas{
+  border:2px solid red;
+  max-height:95vh;
+}
+body{
+  margin:0;
+  padding:0;
+  border:0;
+}
+</style>
+</html>

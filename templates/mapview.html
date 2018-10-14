@@ -1,0 +1,114 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.2.0/dist/leaflet.css"
+  integrity="sha512-M2wvCLH6DSRazYeZRIm1JnYyh22purTM+FDB5CsyxtQJYeKq83arPe5wgbNmcFXGqiSH2XR8dT/fJISVA1r/zQ=="
+  crossorigin=""/>
+<script src="/.well-known/jquery.min.js"></script>
+
+<script src="https://unpkg.com/leaflet@1.2.0/dist/leaflet.js"
+  integrity="sha512-lInM/apFSqyy1o6s89K4iQUKg6ppXEgsVxT35HbzUupEVRh2Eu9Wdl4tHj7dZO0s1uvplcYGmt3498TtHq+log=="
+    crossorigin=""></script>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.3.0/dist/leaflet.markercluster-src.js"></script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+{% load static %}
+<link rel="icon" href="{% static "favicon.ico" %}" type="image/x-icon">
+	  </head>
+	  <body>
+ <div id="mapid" ></div>
+ <div id="explanation">
+   {% for offense in offenses%}
+   <img width="42px" height="42px" src="{% static offense.icon %}" alt="marker"> {{offense.name}}<br/>
+   {% endfor %}
+
+ </div>
+  </body>
+  <script>
+var map;
+var plotlayers=[];
+var plotlist;
+var markers=null;
+
+var offensetitle={
+  {% for offense in offenses%} {{offense.id}}: '{{offense.name}}', {% endfor %}
+};
+
+function initMap(){
+  map = L.map('mapid').setView(new L.LatLng({{lat}}, {{lng}}),10);
+
+  // create the tile layer with correct attribution
+  var osmUrl='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  var osmAttrib='Map data © <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
+  var osm = new L.TileLayer(osmUrl, {minZoom: 1, maxZoom: 16, attribution: osmAttrib});   
+
+  // start the map in South-East England
+  map.addLayer(osm);
+  askForPlots();
+}
+$(document).ready(function(){
+  initMap();
+});
+
+function askForPlots() {
+    // request the marker info with AJAX for the current bounds
+    var bounds=map.getBounds();
+    var minll=bounds.getSouthWest();
+    var maxll=bounds.getNorthEast();
+    var url='getMarkers.html?latmin='+minll.lat+'&lngmin='+minll.lng+'&latmax='+maxll.lat+"&lngmax="+maxll.lng;
+    $.get(url,stateChanged);
+    map.on('moveend', onMapMove);
+}
+
+function removeMarkers() {
+  if(markers){
+          map.removeLayer(markers);
+          markers = null;
+  }
+}
+
+function stateChanged(data){
+	var plotlist = data['markers'];
+			removeMarkers();
+  // console.log(plotlist);
+      markers = new L.markerClusterGroup();
+			for (i=0;i<plotlist.length;i++) {
+				var plotll = new L.LatLng(plotlist[i][0],plotlist[i][1], true);
+        var plotmark = new L.Marker(plotll, {icon: offenseimage[plotlist[i][5]]});
+				plotmark.data=plotlist[i][2];
+        if(plotlist[i][3]){
+          title='<a href="'+plotlist[i][3]+'" target="_blank">'+plotlist[i][4]+'</a>' ;
+        }else{
+          title=plotlist[i][4];
+        }
+        plotmark.bindPopup("<h3>"+plotlist[i][2]+"</h3>"+title+"<br/>"+offensetitle[plotlist[i][5]])
+				plotlayers.push(plotmark);
+        markers.addLayer(plotmark);
+			}
+      map.addLayer(markers);
+}
+
+// then add this as a new function...
+function onMapMove(e) { askForPlots(); }
+var offenseimage={
+  {% for offense in offenses%} 
+  {{offense.id}}: L.icon({
+        iconUrl: '{% static offense.icon %}',
+    
+        iconSize:     [48, 48], // size of the icon
+        iconAnchor:   [24, 48], // point of the icon which will correspond to marker's location
+        popupAnchor:  [-3, -36] // point from which the popup should open relative to the iconAnchor
+  }), {% endfor %}
+}
+
+  </script>
+<style>
+#mapid{height: 95vh;width:95vw;}
+#explanation { min-width: 19em; }
+</style>
+</html>

@@ -1,0 +1,26 @@
+{
+    "dev": {
+        "aws_region": "eu-central-1",
+        "django_settings": "wegeheld.settings",
+        "profile_name": "default",
+        "project_name": "aws2",
+        "runtime": "python3.6",
+        "s3_bucket": "elasticbeanstalk-eu-central-1-024444242834",
+        "vpc_config" : {
+          "SubnetIds":[ "subnet-9e1191f5", "subnet-05f43178", "subnet-c25df68f" ],
+          "SecurityGroupIds": [ "sg-bf9bdbd5" ]
+        }
+    },
+    "prod": {
+        "aws_region": "eu-central-1",
+        "django_settings": "wegeheld.settings",
+        "profile_name": "default",
+        "project_name": "aws2",
+        "runtime": "python3.6",
+        "s3_bucket": "elasticbeanstalk-eu-central-1-024444242834",
+        "vpc_config" : {
+          "SubnetIds":[ "subnet-9e1191f5", "subnet-05f43178", "subnet-c25df68f" ],
+          "SecurityGroupIds": [ "sg-bf9bdbd5" ]
+        }
+    }
+}

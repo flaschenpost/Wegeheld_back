@@ -1,0 +1,119 @@
+swagger: "2.0"
+info:
+  description: "Wegeheld-API"
+  version: "1.0.0"
+  title: "Wegeheld Backend API"
+  termsOfService: "www.wegeheld.org"
+  contact:
+    email: "info@halle-verkehrt.de"
+host: "api.wegeheld.org"
+basePath: "/"
+tags:
+- name: "basedata"
+  description: "Laden der Stammdaten"
+schemes:
+- "https"
+paths:
+  /getBaseData:
+    get:
+      tags:
+      - "basedata"
+      summary: "load main data"
+      description: ""
+      operationId: "getBaseData"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      responses:
+        500:
+          description: "Internal Server Error"
+        200:
+          description: "Success"
+          schema:
+            type: object
+            $ref: "#/definitions/BaseData"
+
+definitions:
+  BaseData: 
+    type: object
+    properties:
+      actions: 
+        type: array
+        items:
+          $ref: "#/definitions/Action"
+      brands: 
+        type: array
+        items:
+          $ref: "#/definitions/Brand"
+      colors: 
+        type: array
+        items:
+          $ref: "#/definitions/Color"
+      obstructions: 
+        type: array
+        items:
+          $ref: "#/definitions/Obstruction"
+        
+  Action:
+    type: "object"
+    properties:
+      id: 
+        type: "integer"
+      name:
+        type: "string"
+  Brand:
+    type: "object"
+    properties:
+      id: 
+        type: "integer"
+      name:
+        type: "string"
+  Color:
+    type: "object"
+    properties:
+      id: 
+        type: "integer"
+      name:
+        type: "string"
+  Obstruction:
+    type: "object"
+    properties:
+      id: 
+        type: "integer"
+      name:
+        type: "string"
+      remark:
+        type: "string"
+  Offenses:
+    type: "object"
+    properties:
+      id: 
+        type: "integer"
+      name:
+        type: "string"
+  FunnySaying:
+    type: "object"
+    properties:
+      id: 
+        type: "integer"
+      text:
+        type: "string"
+      valid_offenses: 
+        type: "integer"
+  Reporter:
+    type: "object"
+    properties:
+      id: 
+        type: "integer"
+      email:
+        type: "string"
+      nickname:
+        type: "string"
+      zip:
+        type: "string"
+      city:
+        type: "string"
+
+
+
