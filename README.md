@@ -1,6 +1,6 @@
 # Wegeheld_back
 
-Backend der Wegeheld-App. Die Produktivversionen der Apps benutzen einen hier nicht veröffentlichten Teil.
+Backend der Wegeheld-App. Die Produktiversionen der Apps benutzen einen hier nicht veröffentlichten Teil.
 
 Öffentlich unter der GPLv3 Lizenz.
 
