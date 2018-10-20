@@ -1,2 +1,5 @@
+venv
 .venv
+__pycache__
+migrations
 wegeheld/settings.py
